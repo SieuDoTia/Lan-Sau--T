@@ -8,7 +8,6 @@
 
 
 typedef struct {
-//   char loai[4];      // loại tài nguyên, 4 ký tự như XXXX
    char ten[32];        // tên tà nguyên (nếu có) dài nhất 31 ký tự
    short maSo;          // mã sô tài nguyên 
    unsigned int beDai;  // bề dài dữ liệu tài nguyên
@@ -22,7 +21,7 @@ typedef struct {
 
 
 typedef struct {
-   char loai[4];        // loại tài nguyên, 4 ký tự như XXXX
+   unsigned int loai;        // loại tài nguyên, 4 ký tự như XXXX
    short dichDanhSachTaiNguyen;
    unsigned short soLuongTaiNguyen;
    TaiNguyen *mangTaiNguyen;
@@ -117,11 +116,7 @@ BangTaiNguyen docBangTaiNguyen( char *tenTep ) {
       bangTaiNguyen.mangOBangLoaiTaiNguyen = malloc(sizeof( OBangLoaiTaiNguyen )*bangTaiNguyen.soLuongTaiNguyen );
       chiSo = 0;
       while( chiSo < bangTaiNguyen.soLuongTaiNguyen ) {
-         bangTaiNguyen.mangOBangLoaiTaiNguyen[chiSo].loai[0] = fgetc( tep );
-         bangTaiNguyen.mangOBangLoaiTaiNguyen[chiSo].loai[1] = fgetc( tep );
-         bangTaiNguyen.mangOBangLoaiTaiNguyen[chiSo].loai[2] = fgetc( tep );
-         bangTaiNguyen.mangOBangLoaiTaiNguyen[chiSo].loai[3] = fgetc( tep );
-         
+         bangTaiNguyen.mangOBangLoaiTaiNguyen[chiSo].loai = fgetc( tep ) << 24 | fgetc( tep ) << 16 | fgetc( tep ) << 8 | fgetc( tep );
          bangTaiNguyen.mangOBangLoaiTaiNguyen[chiSo].soLuongTaiNguyen = (fgetc( tep ) << 8 | fgetc( tep )) + 1;
          bangTaiNguyen.mangOBangLoaiTaiNguyen[chiSo].dichDanhSachTaiNguyen = fgetc( tep ) << 8 | fgetc( tep );
          chiSo++;
@@ -156,7 +151,7 @@ BangTaiNguyen docBangTaiNguyen( char *tenTep ) {
          }
          chiSo++;
       }
-      
+
       // ==== đọc tên tài nguyên (nếu có)
       chiSo = 0;
       while( chiSo < bangTaiNguyen.soLuongTaiNguyen ) {
@@ -205,7 +200,19 @@ BangTaiNguyen docBangTaiNguyen( char *tenTep ) {
                // ---- bề dài dữ liệu
             fseek( tep, taiNguyen->diaChiDuLieu, SEEK_SET );
                taiNguyen->beDai = fgetc( tep ) << 24 | fgetc( tep ) << 16 | fgetc( tep ) << 8 | fgetc( tep );
-            
+            taiNguyen->duLieu = malloc( taiNguyen->beDai );
+            if( taiNguyen->duLieu != NULL ) {
+               unsigned int chiSoDuLieu = 0;
+               while( chiSoDuLieu < taiNguyen->beDai ) {
+                  taiNguyen->duLieu[chiSoDuLieu] = fgetc( tep );
+                  chiSoDuLieu++;
+               }
+            }
+            else {
+               unsigned int loai = oBangLoaiTaiNguyen->loai;
+               printf( "Sai lầm: không thể giành trí nhớ cho tài nguyên %c%c%c%c\n",
+                      (loai >> 24) & 0xff, (loai >> 16) & 0xff, (loai >> 8) & 0xff, loai & 0xff );
+            }
             soTaiNguyen++;
          }
          chiSo++;
@@ -237,11 +244,12 @@ void chieuThonTinBangTaiNguyen( BangTaiNguyen *bangTaiNguyen ) {
    unsigned short chiSo = 0;
    while( chiSo < bangTaiNguyen->soLuongTaiNguyen ) {
       OBangLoaiTaiNguyen *oBangLoaiTaiNguyen = &(bangTaiNguyen->mangOBangLoaiTaiNguyen[chiSo]);
-      printf( "Loại %c%c%c%c   số lượng: %d   dịch: %d\n",
-             oBangLoaiTaiNguyen->loai[0],
-             oBangLoaiTaiNguyen->loai[1],
-             oBangLoaiTaiNguyen->loai[2],
-             oBangLoaiTaiNguyen->loai[3],
+      unsigned int loaiTaiNguyen = oBangLoaiTaiNguyen->loai;
+      printf( "Loại '%c%c%c%c'   số lượng: %d   dịch: %d\n",
+             (loaiTaiNguyen >> 24) & 0xff,
+             (loaiTaiNguyen >> 16) & 0xff,
+             (loaiTaiNguyen >> 8) & 0xff,
+             loaiTaiNguyen & 0xff,
              oBangLoaiTaiNguyen->soLuongTaiNguyen,
              oBangLoaiTaiNguyen->dichDanhSachTaiNguyen );
       
@@ -258,8 +266,98 @@ void chieuThonTinBangTaiNguyen( BangTaiNguyen *bangTaiNguyen ) {
                 taiNguyen->dacTinh,
                 taiNguyen->dichTen,
                 taiNguyen->diaChiDuLieu );
+         
+         printf( "    " );
+         unsigned int chiSoDuLieu = 0;
+         unsigned int chiSoDuLieuCuoi = 512;
+         if( taiNguyen->beDai < chiSoDuLieuCuoi )
+            chiSoDuLieuCuoi = taiNguyen->beDai;
+            
+         while( chiSoDuLieu < chiSoDuLieuCuoi ) {
+            printf( "%02x ", taiNguyen->duLieu[chiSoDuLieu] );
+            chiSoDuLieu++;
+            if( chiSoDuLieu % 24 == 0 ) {
+               printf( "\n    " );
+            }
+         }
+         printf( "\n\n" );
          soTaiNguyen++;
       }
       chiSo++;
    }
+}
+
+
+#pragma mark ==== CẤU TRÚC TÀI NGUYÊN ====
+#pragma mark ---- 'CODE'
+
+typedef struct {
+   short id;
+   
+   
+} CODE;
+
+
+
+#pragma mark ---- 'WIND'
+
+typedef struct {
+   short id;
+
+   short top;
+   short left;
+   short bottom;
+   short right;
+   
+   short definitionID;    // loại cửa số
+   unsigned short visibilityStatus;
+   unsigned short closeBox;
+   unsigned int referenceConst;
+   unsigned char titleLength;
+   char title[257];      // cho tựa dài 256 ký tự và ký tựa kết thúc
+   short position;
+} WIND;
+
+WIND docWIND( unsigned char *duLieu, short id ) {
+   
+   WIND taiNguyenWIND;
+   taiNguyenWIND.id = id;
+   
+   taiNguyenWIND.top = *duLieu << 8 | *(duLieu++);
+   taiNguyenWIND.left = *(duLieu++) << 8 | *(duLieu++);
+   taiNguyenWIND.bottom = *(duLieu++) << 8 | *(duLieu++);
+   taiNguyenWIND.right = *(duLieu++) << 8 | *(duLieu++);
+   
+   taiNguyenWIND.definitionID = *(duLieu++) << 8 | *(duLieu++);
+   taiNguyenWIND.visibilityStatus = *(duLieu++) << 8 | *(duLieu++);
+   taiNguyenWIND.closeBox = *(duLieu++) << 8 | *(duLieu++);
+   taiNguyenWIND.referenceConst = *(duLieu++) << 8 | *(duLieu++);
+   
+   // ---- title
+   taiNguyenWIND.titleLength = *(duLieu++);
+   unsigned chiSo = 0;
+   while( chiSo <= taiNguyenWIND.titleLength ) {
+      taiNguyenWIND.title[chiSo] = *(duLieu++);
+      chiSo++;
+   }
+   taiNguyenWIND.title[chiSo] = 0x00;
+
+//   taiNguyenWIND.position = *(duLieu++) << 8 | *(duLieu++);
+
+   return taiNguyenWIND;
+}
+
+void inThongTinTaiNguyenWIND( WIND *taiNguyenWIND ) {
+
+   printf( "'WIND'  %s\n", taiNguyenWIND->title );
+   printf( "   Rect: %d %d %d %d\n",
+          taiNguyenWIND->top,
+          taiNguyenWIND->left,
+          taiNguyenWIND->bottom,
+          taiNguyenWIND->right );
+
+   printf( "   definitionID: %d  close box: %d  reference const: %d\n",
+          taiNguyenWIND->definitionID,
+          taiNguyenWIND->closeBox,
+          taiNguyenWIND->referenceConst );
 }
